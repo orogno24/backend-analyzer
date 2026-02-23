@@ -1,0 +1,54 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.2'
+    id 'io.spring.dependency-management' version '1.1.5'
+}
+
+group = 'com.analyzer'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    
+    // H2 Database
+    runtimeOnly 'com.h2database:h2'
+    
+    // JSON 처리
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    
+    // Lombok (보일러플레이트 코드 제거)
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // 파일 압축 처리
+    implementation 'org.apache.commons:commons-compress:1.25.0'
+    
+    // HTTP 클라이언트 (Ollama API 호출용)
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    
+    // LangChain4j - RAG 구현
+    implementation 'dev.langchain4j:langchain4j:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-ollama:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-embeddings-all-minilm-l6-v2:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-embeddings:0.35.0'
+    // InMemoryEmbeddingStore는 langchain4j 코어에 포함됨 (별도 아티팩트 없음)
+
+    // 테스트
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: backend-analyzer
+  
+  # H2 Database
+  datasource:
+    url: jdbc:h2:file:./data/analyzer;MODE=LEGACY;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  
+  # 파일 업로드 설정
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+# 애플리케이션 설정
+analyzer:
+  storage:
+    upload-dir: ./uploads
+    result-dir: ./results
+    # 프로젝트 zip 저장 경로 (작업 디렉토리 기준 상대 경로)
+    projects-dir: ./data/projects
+  ollama:
+    base-url: http://localhost:11434
+    model: gemma2:9b
+    timeout-seconds: 900  # 15분으로 증가 (대용량 프로젝트 대응)
+
+server:
+  port: 8080

@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Analyzer - 프로젝트 업로드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .file-upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 50px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9ff;
+        }
+
+        .file-upload-area:hover {
+            background: #f0f4ff;
+            border-color: #764ba2;
+        }
+
+        .file-upload-area.drag-over {
+            background: #e8edff;
+            border-color: #667eea;
+            transform: scale(1.02);
+        }
+
+        .file-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8f4f8;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-message {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result-message.show {
+            display: block;
+        }
+
+        .result-message.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result-message.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result-content {
+            margin-top: 10px;
+        }
+
+        .project-id {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+
+        .ai-retry-btn {
+            margin-top: 12px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        .ai-retry-btn:hover:not(:disabled) { opacity: 0.9; }
+        .ai-retry-btn:disabled { opacity: 0.6; cursor: wait; }
+
+        .ai-result {
+            margin-top: 10px;
+            padding: 12px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            font-size: 0.95em;
+            text-align: left;
+        }
+
+        .domain-section {
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .domain-header {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .domain-description {
+            color: #555;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .component-list {
+            margin: 8px 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .call-chains {
+            margin: 12px 0;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+
+        .tables {
+            margin: 12px 0;
+            padding: 10px;
+            background: #f0f8e8;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+
+        .coupling {
+            margin: 12px 0;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+
+        .coupling-issue {
+            padding: 12px;
+            margin: 10px 0;
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            border-radius: 6px;
+        }
+
+        .ms-suggestion {
+            padding: 12px;
+            margin: 10px 0;
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            border-radius: 6px;
+        }
+
+        .confidence {
+            margin-top: 12px;
+            padding: 8px;
+            background: #e9ecef;
+            border-radius: 6px;
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Backend Analyzer</h1>
+            <p class="subtitle">Spring Boot 프로젝트 구조 분석 도구</p>
+        </header>
+
+        <div class="card">
+            <div class="info-box">
+                📌 <strong>업로드 조건</strong><br>
+                • 파일 형식: zip만 가능 · 최대 100MB · Spring Boot 프로젝트 zip
+            </div>
+
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="projectName">프로젝트 이름 *</label>
+                    <input 
+                        type="text" 
+                        id="projectName" 
+                        name="name" 
+                        placeholder="예: 쇼핑몰 백엔드 API" 
+                        required>
+                </div>
+
+                <div class="form-group">
+                    <label for="projectDescription">프로젝트 설명 (선택)</label>
+                    <textarea 
+                        id="projectDescription" 
+                        name="description" 
+                        placeholder="프로젝트에 대한 간단한 설명을 입력하세요"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>프로젝트 파일 업로드 *</label>
+                    <div class="file-upload-area" id="fileUploadArea">
+                        <div class="file-icon">📦</div>
+                        <p><strong>zip 파일을 드래그하거나 클릭하여 선택하세요</strong></p>
+                        <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                            최대 100MB
+                        </p>
+                        <input type="file" id="fileInput" accept=".zip" style="display: none;" required>
+                    </div>
+                    <div class="file-info" id="fileInfo">
+                        <div class="file-name" id="fileName"></div>
+                        <div class="file-size" id="fileSize"></div>
+                    </div>
+                </div>
+
+                <button type="submit" id="uploadBtn">
+                    <span id="btnText">업로드 시작</span>
+                </button>
+            </form>
+
+            <div class="result-message" id="resultMessage">
+                <div class="result-content" id="resultContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM 요소
+        const uploadForm = document.getElementById('uploadForm');
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const btnText = document.getElementById('btnText');
+        const resultMessage = document.getElementById('resultMessage');
+        const resultContent = document.getElementById('resultContent');
+
+        let selectedFile = null;
+
+        // 파일 업로드 영역 클릭
+        fileUploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 파일 선택
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        // 드래그 앤 드롭
+        fileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.add('drag-over');
+        });
+
+        fileUploadArea.addEventListener('dragleave', () => {
+            fileUploadArea.classList.remove('drag-over');
+        });
+
+        fileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.remove('drag-over');
+            
+            if (e.dataTransfer.files.length > 0) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        // 파일 선택 처리
+        function handleFileSelect(file) {
+            // zip 파일 확인
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                showResult('error', 'zip 파일만 업로드 가능합니다.');
+                return;
+            }
+
+            // 파일 크기 확인 (100MB)
+            const maxSize = 100 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showResult('error', '파일 크기는 100MB를 초과할 수 없습니다.');
+                return;
+            }
+
+            selectedFile = file;
+            
+            // 파일 정보 표시
+            fileName.textContent = `📄 ${file.name}`;
+            fileSize.textContent = `크기: ${formatFileSize(file.size)}`;
+            fileInfo.classList.add('show');
+
+            // 메시지 숨기기
+            resultMessage.classList.remove('show');
+        }
+
+        // 파일 크기 포맷팅
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // 폼 제출
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!selectedFile) {
+                showResult('error', '파일을 선택해주세요.');
+                return;
+            }
+
+            const projectName = document.getElementById('projectName').value;
+            const projectDescription = document.getElementById('projectDescription').value;
+
+            // FormData 생성
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('name', projectName);
+            if (projectDescription) {
+                formData.append('description', projectDescription);
+            }
+
+            // 업로드 시작
+            uploadBtn.disabled = true;
+            btnText.innerHTML = '<span class="loading-spinner"></span> 업로드 중...';
+            resultMessage.classList.remove('show');
+
+            try {
+                const response = await fetch('/projects', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || '업로드 실패');
+                }
+
+                const result = await response.json();
+                const projectId = result.projectId;
+
+                // 폼 초기화
+                uploadForm.reset();
+                selectedFile = null;
+                fileInfo.classList.remove('show');
+
+                // ⭐ 기존 프로젝트 재사용 체크
+                if (result.reused) {
+                    showResult('success', 
+                        `🔄 <strong>기존 프로젝트 재사용!</strong><br><br>` +
+                        `프로젝트 ID: <code>${projectId}</code><br><br>` +
+                        `✅ 동일한 소스코드가 감지되어 <strong>기존 분석 결과를 재사용</strong>합니다.<br>` +
+                        `⏳ RAG 인덱싱 상태 확인 중... (서버 재시작 시 재인덱싱 필요)`
+                    );
+                    
+                    // ⭐ 재사용이어도 RAG 인덱싱은 확인/실행해야 함!
+                    // (서버 재시작 시 메모리 캐시가 날아가기 때문)
+                    // 아래 로직으로 그냥 진행
+                }
+
+                // 업로드 성공 → RAG 인덱싱 후 분석 페이지로 이동
+                showResult('success', 
+                    `✅ <strong>업로드 성공!</strong><br><br>` +
+                    `프로젝트 ID: <code>${projectId}</code><br><br>` +
+                    `⏳ RAG 인덱싱을 시작합니다... (1~2분 소요)`
+                );
+
+                try {
+                    // RAG 인덱싱
+                    const ragIndexRes = await fetch(`/api/projects/${projectId}/rag/index`, { method: 'POST' });
+                    if (!ragIndexRes.ok) {
+                        const errText = await ragIndexRes.text();
+                        throw new Error(errText || 'RAG 인덱싱 실패');
+                    }
+                    const ragResult = await ragIndexRes.json();
+                    
+                    const reusedMessage = result.reused ? 
+                        `🔄 기존 프로젝트 재사용 (BC 캐시 활용 가능)<br><br>` : '';
+                    
+                    showResult('success', 
+                        `✅ <strong>RAG 인덱싱 완료!</strong><br><br>` +
+                        reusedMessage +
+                        `프로젝트 ID: <code>${projectId}</code><br><br>` +
+                        `📦 ${ragResult.chunkCount}개 코드 청크 생성<br><br>` +
+                        `⏳ 인덱스 상태 확인 중...`
+                    );
+
+                    // 인덱스 상태 확인 (최대 3번 재시도)
+                    let retries = 0;
+                    let indexed = false;
+                    
+                    while (retries < 3 && !indexed) {
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+                        
+                        const statusRes = await fetch(`/api/projects/${projectId}/rag/status`);
+                        if (statusRes.ok) {
+                            const status = await statusRes.json();
+                            if (status.status === 'INDEXED' && status.indexedChunks > 0) {
+                                indexed = true;
+                                break;
+                            }
+                        }
+                        retries++;
+                    }
+                    
+                    if (!indexed) {
+                        throw new Error('인덱스 상태 확인 실패 (타임아웃)');
+                    }
+                    
+                    showResult('success', 
+                        `✅ <strong>분석 준비 완료!</strong><br><br>` +
+                        `프로젝트 ID: <code>${projectId}</code><br><br>` +
+                        `📦 ${ragResult.chunkCount}개 코드 청크 인덱싱 완료<br><br>` +
+                        `🎉 2초 후 분석 페이지로 이동합니다...`
+                    );
+
+                    // 2초 후 분석 페이지로 리다이렉트
+                    setTimeout(() => {
+                        window.location.href = `/analysis.html?projectId=${projectId}`;
+                    }, 2000);
+                    
+                } catch (analysisErr) {
+                    showResult('error',
+                        `✅ 업로드 완료. ❌ 인덱싱 실패.<br><br>` +
+                        `프로젝트 ID: <code>${projectId}</code><br><br>` +
+                        `오류: ${escapeHtml(analysisErr.message)}<br><br>` +
+                        `<button type="button" class="ai-retry-btn" onclick="retryIndexing('${projectId}')">🔄 인덱싱 재시도</button> ` +
+                        `<button type="button" class="ai-retry-btn" onclick="window.location.href='/analysis.html?projectId=${projectId}'">📊 분석 페이지로 이동 (강제)</button>`
+                    );
+                }
+
+            } catch (error) {
+                showResult('error', 
+                    `❌ <strong>업로드 실패</strong><br><br>` +
+                    `${error.message}`
+                );
+            } finally {
+                uploadBtn.disabled = false;
+                btnText.textContent = '업로드 시작';
+            }
+        });
+
+        // 결과 메시지 표시
+        function showResult(type, message) {
+            resultMessage.className = 'result-message show ' + type;
+            resultContent.innerHTML = message;
+        }
+
+        function escapeHtml(text) {
+            if (text == null) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatAiResult(ai) {
+            // 레거시 - 새로운 도메인 분석으로 대체 예정
+            return formatDomainResult(ai);
+        }
+
+        function formatEnhancedBCResult(data) {
+            if (!data || !data.contexts || data.contexts.length === 0) {
+                let html = '<div style="color:#999; margin:10px 0;">Context 없음</div>';
+                if (data.questions && data.questions.length > 0) {
+                    html += '<div style="margin-top:10px; padding:10px; background:#fff3cd; border-radius:6px;"><strong>❓ 발견사항:</strong><br>';
+                    data.questions.forEach(q => html += `• ${escapeHtml(q)}<br>`);
+                    html += '</div>';
+                }
+                if (data.nextRecommendations && data.nextRecommendations.length > 0) {
+                    html += '<div style="margin-top:10px; padding:10px; background:#d1ecf1; border-radius:6px;"><strong>💡 다음 단계:</strong><br>';
+                    data.nextRecommendations.forEach(r => html += `• ${escapeHtml(r)}<br>`);
+                    html += '</div>';
+                }
+                return html;
+            }
+
+            let html = '';
+            
+            // Bounded Contexts
+            data.contexts.forEach(ctx => {
+                html += `<div style="border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; background: white; border-radius: 8px;">`;
+                html += `<div style="font-size:1.3em; font-weight:bold; color:#333; margin-bottom:10px;">${escapeHtml(ctx.domain)}`;
+                if (ctx.subdomain) html += ` / ${escapeHtml(ctx.subdomain)}`;
+                html += `</div>`;
+                
+                if (ctx.description) {
+                    html += `<div style="color:#555; margin-bottom:15px; line-height:1.6;">${escapeHtml(ctx.description)}</div>`;
+                }
+                
+                if (ctx.controllers && ctx.controllers.length > 0) {
+                    html += `<div style="margin:8px 0; font-size:0.9em; color:#666;"><strong>Controllers:</strong> ${ctx.controllers.map(c => escapeHtml(c)).join(', ')}</div>`;
+                }
+                
+                if (ctx.services && ctx.services.length > 0) {
+                    html += `<div style="margin:8px 0; font-size:0.9em; color:#666;"><strong>Services:</strong> ${ctx.services.map(s => escapeHtml(s)).join(', ')}</div>`;
+                }
+                
+                if (ctx.repositories && ctx.repositories.length > 0) {
+                    html += `<div style="margin:8px 0; font-size:0.9em; color:#666;"><strong>Repositories:</strong> ${ctx.repositories.map(r => escapeHtml(r)).join(', ')}</div>`;
+                }
+                
+                // 호출 체인
+                if (ctx.callChains && ctx.callChains.length > 0) {
+                    html += `<div style="margin:12px 0; padding:10px; background:#e8f4f8; border-radius:6px; font-size:0.9em;">`;
+                    html += `<strong>📞 호출 구조:</strong><br>`;
+                    ctx.callChains.forEach(chain => html += `• ${escapeHtml(chain)}<br>`);
+                    html += `</div>`;
+                }
+                
+                // 테이블
+                if (ctx.accessedTables && ctx.accessedTables.length > 0) {
+                    html += `<div style="margin:12px 0; padding:10px; background:#f0f8e8; border-radius:6px; font-size:0.9em;">`;
+                    html += `<strong>🗂️ 주요 테이블:</strong> ${ctx.accessedTables.map(t => escapeHtml(t)).join(', ')}`;
+                    html += `</div>`;
+                }
+                
+                // 공유 컴포넌트
+                if (ctx.sharedComponents && ctx.sharedComponents.length > 0) {
+                    html += `<div style="margin:12px 0; padding:10px; background:#fff3cd; border-radius:6px; font-size:0.9em;">`;
+                    html += `<strong>⚠️ 공유 컴포넌트:</strong> ${ctx.sharedComponents.map(c => escapeHtml(c)).join(', ')}`;
+                    html += `</div>`;
+                }
+                
+                html += `<div style="margin-top:12px; padding:8px; background:#e9ecef; border-radius:6px; font-size:0.85em; color:#666;">`;
+                html += `<strong>확신도:</strong> ${(ctx.confidence * 100).toFixed(0)}%`;
+                if (ctx.note) html += ` | ${escapeHtml(ctx.note)}`;
+                html += `</div>`;
+                
+                html += `</div>`;
+            });
+
+            // 커플링 이슈
+            if (data.couplingIssues && data.couplingIssues.length > 0) {
+                html += `<div style="margin-top:20px;"><h3 style="color:#dc3545;">⚠️ 커플링 감지</h3>`;
+                data.couplingIssues.forEach(issue => {
+                    html += `<div style="padding:12px; margin:10px 0; background:#f8d7da; border-left:4px solid #dc3545; border-radius:6px;">`;
+                    html += `<strong>${escapeHtml(issue.component)}</strong> - ${issue.sharedBy.map(b => escapeHtml(b)).join(', ')}에서 공유<br>`;
+                    html += `사유: ${escapeHtml(issue.reason)}`;
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+
+            // 마이크로서비스 제안
+            if (data.microserviceSuggestions && data.microserviceSuggestions.length > 0) {
+                html += `<div style="margin-top:20px;"><h3 style="color:#17a2b8;">🚀 마이크로서비스 분리 제안</h3>`;
+                data.microserviceSuggestions.forEach(sug => {
+                    html += `<div style="padding:12px; margin:10px 0; background:#d1ecf1; border-left:4px solid #17a2b8; border-radius:6px;">`;
+                    html += `<strong>${escapeHtml(sug.name)}</strong><br>`;
+                    html += `• BC: ${sug.boundedContexts.map(b => escapeHtml(b)).join(', ')}<br>`;
+                    html += `• 테이블: ${sug.tables.map(t => escapeHtml(t)).join(', ')}`;
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+
+            // 질문 & 권장사항
+            if (data.questions && data.questions.length > 0) {
+                html += `<div style="margin-top:15px; padding:10px; background:#fff3cd; border-radius:6px; font-size:0.9em;">`;
+                html += `<strong>❓ 추가 확인 사항:</strong><br>`;
+                data.questions.forEach(q => html += `• ${escapeHtml(q)}<br>`);
+                html += `</div>`;
+            }
+
+            if (data.nextRecommendations && data.nextRecommendations.length > 0) {
+                html += `<div style="margin-top:10px; padding:10px; background:#d1ecf1; border-radius:6px; font-size:0.9em;">`;
+                html += `<strong>💡 다음 단계:</strong><br>`;
+                data.nextRecommendations.forEach(r => html += `• ${escapeHtml(r)}<br>`);
+                html += `</div>`;
+            }
+
+            return html;
+        }
+
+        function formatBoundedContextResult(data) {
+            if (!data || !data.contexts || data.contexts.length === 0) {
+                let html = '<div style="color:#999; margin:10px 0;">Context 없음</div>';
+                if (data.questions && data.questions.length > 0) {
+                    html += '<div style="margin-top:10px;"><strong>❓ 발견사항:</strong><br>';
+                    data.questions.forEach(q => html += `• ${escapeHtml(q)}<br>`);
+                    html += '</div>';
+                }
+                if (data.nextRecommendations && data.nextRecommendations.length > 0) {
+                    html += '<div style="margin-top:10px;"><strong>💡 권장사항:</strong><br>';
+                    data.nextRecommendations.forEach(r => html += `• ${escapeHtml(r)}<br>`);
+                    html += '</div>';
+                }
+                return html;
+            }
+
+            let html = '';
+            data.contexts.forEach(ctx => {
+                html += `<div style="border-left: 3px solid #667eea; padding-left: 12px; margin: 15px 0;">`;
+                html += `<strong style="font-size:1.1em;">${escapeHtml(ctx.domain)}</strong>`;
+                if (ctx.subdomain) html += ` <span style="color:#666;">/ ${escapeHtml(ctx.subdomain)}</span>`;
+                if (ctx.note) html += `<br><span style="color:#888; font-size:0.85em;">${escapeHtml(ctx.note)}</span>`;
+                
+                if (ctx.controllers && ctx.controllers.length > 0) {
+                    html += `<div style="margin-top:8px; font-size:0.9em;">`;
+                    html += `<strong>Controllers:</strong> ${ctx.controllers.map(c => escapeHtml(c)).join(', ')}`;
+                    html += `</div>`;
+                }
+                
+                if (ctx.services && ctx.services.length > 0) {
+                    html += `<div style="margin-top:6px; font-size:0.9em;">`;
+                    html += `<strong>Services:</strong> ${ctx.services.map(s => escapeHtml(s)).join(', ')}`;
+                    html += `</div>`;
+                }
+                
+                if (ctx.repositories && ctx.repositories.length > 0) {
+                    html += `<div style="margin-top:6px; font-size:0.9em;">`;
+                    html += `<strong>Repositories:</strong> ${ctx.repositories.map(r => escapeHtml(r)).join(', ')}`;
+                    html += `</div>`;
+                }
+                
+                html += `<div style="margin-top:6px; font-size:0.85em; color:#666;">`;
+                html += `확신도: ${(ctx.confidence * 100).toFixed(0)}%`;
+                if (ctx.dbMappingNote) html += ` | DB: ${escapeHtml(ctx.dbMappingNote)}`;
+                html += `</div>`;
+                
+                html += `</div>`;
+            });
+
+            if (data.questions && data.questions.length > 0) {
+                html += `<div style="margin-top:15px; padding:10px; background:#fff3cd; border-radius:6px; font-size:0.9em;">`;
+                html += `<strong>❓ 발견사항:</strong><br>`;
+                data.questions.forEach(q => html += `• ${escapeHtml(q)}<br>`);
+                html += `</div>`;
+            }
+
+            if (data.nextRecommendations && data.nextRecommendations.length > 0) {
+                html += `<div style="margin-top:10px; padding:10px; background:#d1ecf1; border-radius:6px; font-size:0.9em;">`;
+                html += `<strong>💡 다음 단계:</strong><br>`;
+                data.nextRecommendations.forEach(r => html += `• ${escapeHtml(r)}<br>`);
+                html += `</div>`;
+            }
+
+            return html;
+        }
+
+        function formatDomainResult(data) {
+            if (!data || !data.domains || data.domains.length === 0) {
+                return `<div style="color:#999; margin:10px 0;">도메인 없음</div>`;
+            }
+
+            let html = '';
+            data.domains.forEach(domain => {
+                html += `<div style="border-left: 3px solid #667eea; padding-left: 12px; margin: 15px 0;">`;
+                html += `<strong style="font-size:1.1em;">${escapeHtml(domain.domainName)}</strong>`;
+                if (domain.domainNameEn) html += ` <span style="color:#666;">(${escapeHtml(domain.domainNameEn)})</span>`;
+                if (domain.description) html += `<br><span style="color:#555; font-size:0.9em;">${escapeHtml(domain.description)}</span>`;
+                
+                if (domain.services && domain.services.length > 0) {
+                    html += `<div style="margin-top:10px; font-size:0.95em;">`;
+                    html += `<strong>📋 기능:</strong><br>`;
+                    domain.services.forEach(s => {
+                        html += `&nbsp;&nbsp;• ${escapeHtml(s.name)} - ${escapeHtml(s.functionality)}<br>`;
+                    });
+                    html += `</div>`;
+                }
+                
+                if (domain.relatedEntities && domain.relatedEntities.length > 0) {
+                    html += `<div style="margin-top:8px; font-size:0.9em; color:#666;">`;
+                    html += `🗂️ 엔티티: ${domain.relatedEntities.map(e => escapeHtml(e)).join(', ')}`;
+                    html += `</div>`;
+                }
+                
+                html += `</div>`;
+            });
+
+            if (data.summary) {
+                html += `<div style="margin-top:15px; padding:10px; background:#f8f9fa; border-radius:6px; font-size:0.9em;">`;
+                html += `<strong>📊 요약:</strong> 총 ${data.summary.totalDomains || 0}개 도메인`;
+                if (data.summary.keyFindings) html += `<br>${escapeHtml(data.summary.keyFindings)}`;
+                html += `</div>`;
+            }
+
+            return html;
+        }
+
+        async function runAiAnalysis(projectId, btn) {
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ AI 분석 중...'; }
+            try {
+                const res = await fetch(`/projects/${projectId}/ai/enhanced-bc-analysis`, { method: 'POST' });
+                if (!res.ok) throw new Error(await res.text() || 'AI 분석 실패');
+                const aiResult = await res.json();
+                const base = window.__lastStaticSummary || (`프로젝트 ID: <code>${projectId}</code><br><br>`);
+                showResult('success', base + '<br><strong>🤖 서비스 및 테이블 분석(AI)</strong><br>' + formatEnhancedBCResult(aiResult));
+            } catch (e) {
+                showResult('error', 'AI 분석 실패: ' + escapeHtml(e.message));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '🤖 도메인 AI 분석 실행'; }
+            }
+        }
+
+        async function retryIndexing(projectId) {
+            showResult('success', `⏳ RAG 인덱싱 재시도 중... (프로젝트 ID: ${projectId})`);
+            
+            try {
+                const ragIndexRes = await fetch(`/api/projects/${projectId}/rag/index`, { method: 'POST' });
+                if (!ragIndexRes.ok) {
+                    const errText = await ragIndexRes.text();
+                    throw new Error(errText || 'RAG 인덱싱 실패');
+                }
+                const ragResult = await ragIndexRes.json();
+                
+                showResult('success', 
+                    `✅ <strong>인덱싱 성공!</strong><br><br>` +
+                    `📦 ${ragResult.chunkCount}개 코드 청크<br><br>` +
+                    `<button type="button" class="ai-retry-btn" onclick="window.location.href='/analysis.html?projectId=${projectId}'">📊 분석 페이지로 이동</button>`
+                );
+            } catch (error) {
+                showResult('error', `인덱싱 재시도 실패: ${escapeHtml(error.message)}`);
+            }
+        }
+    </script>
+</body>
+</html>
