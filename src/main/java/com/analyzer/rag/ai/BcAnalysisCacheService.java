@@ -138,6 +138,35 @@ public class BcAnalysisCacheService {
     }
     
     /**
+     * 프로젝트의 BC 분석 캐시 삭제 ⭐⭐⭐
+     * 
+     * @param projectId 프로젝트 ID
+     * @return 삭제 성공 여부
+     */
+    public boolean deleteCache(String projectId) {
+        try {
+            // 1. 메모리 캐시 삭제
+            projectCaches.remove(projectId);
+            
+            // 2. 디스크 캐시 파일 삭제
+            Path cachePath = Paths.get(storageBasePath, "bc-analysis-cache", projectId + ".json");
+            
+            if (Files.exists(cachePath)) {
+                Files.delete(cachePath);
+                log.info("BC 분석 캐시 삭제 완료: {}", cachePath);
+                return true;
+            } else {
+                log.info("삭제할 BC 분석 캐시 파일 없음: {}", projectId);
+                return false;
+            }
+            
+        } catch (IOException e) {
+            log.error("BC 분석 캐시 삭제 실패: projectId={}", projectId, e);
+            return false;
+        }
+    }
+    
+    /**
      * 디스크에서 캐시 로드
      */
     private void loadCacheFromDisk(String projectId) {

@@ -28,6 +28,65 @@ public class DomainService {
      * 이 테이블들은 BC 묶기 신호로 사용하면 안 됨
      * (전체 시스템이 하나로 연결되어 버림)
      */
+    
+    // ⭐⭐⭐ 테이블 지원 타입 분류 (Phase 2)
+    private enum TableSupportType {
+        IDENTITY_SUPPORT,    // USER_AUTH, SESSION, TOKEN
+        OPERATIONAL_SUPPORT, // LOG, HISTORY, AUDIT
+        REFERENCE_DATA,      // CODE, TYPE, STATUS
+        FILE_SUPPORT,        // FILE, IMAGE, ATTACH
+        BUSINESS_DATA        // 일반 비즈니스 테이블
+    }
+    
+    /**
+     * 테이블 지원 타입 분류
+     */
+    private TableSupportType classifyTableType(String tableName) {
+        String upper = tableName.toUpperCase();
+        
+        // Identity/Auth
+        if (upper.contains("USER") && (upper.contains("AUTH") || upper.contains("SESSION") || upper.contains("TOKEN"))) {
+            return TableSupportType.IDENTITY_SUPPORT;
+        }
+        
+        // Operational (로그/이력/감사)
+        if (upper.endsWith("_HIST") || upper.endsWith("_LOG") || upper.endsWith("_HISTORY") ||
+            upper.endsWith("_AUDIT") || upper.contains("TRACE")) {
+            return TableSupportType.OPERATIONAL_SUPPORT;
+        }
+        
+        // Reference Data (코드/타입/상태)
+        if (upper.endsWith("_CODE") || upper.endsWith("_CD") || upper.endsWith("_TYPE") ||
+            upper.endsWith("_STATUS") || upper.endsWith("_MST") || upper.contains("_CODE_")) {
+            return TableSupportType.REFERENCE_DATA;
+        }
+        
+        // File Support (파일/이미지/첨부)
+        if (upper.contains("FILE") || upper.contains("IMAGE") || upper.contains("ATTACH") ||
+            upper.contains("_ATCHMNFL") || upper.contains("UPLOAD")) {
+            return TableSupportType.FILE_SUPPORT;
+        }
+        
+        return TableSupportType.BUSINESS_DATA;
+    }
+    
+    /**
+     * 테이블 타입별 결합 강도 가중치
+     */
+    private double getTableTypeWeight(TableSupportType type) {
+        switch (type) {
+            case IDENTITY_SUPPORT:
+            case OPERATIONAL_SUPPORT:
+                return 0.3;  // 약한 결합 (인증/로그는 공통 지원)
+            case REFERENCE_DATA:
+                return 0.1;  // 거의 무시 (코드 테이블은 공통)
+            case FILE_SUPPORT:
+                return 0.5;  // 중간 (파일은 별도 도메인 가능)
+            default:
+                return 1.0;  // 정상 가중치 (비즈니스 테이블)
+        }
+    }
+    
     private boolean isCommonTable(String tableName) {
         String upper = tableName.toUpperCase();
         
@@ -203,17 +262,26 @@ public class DomainService {
                 
                 // 1️⃣ DB 기반 연결 강도
                 for (String table : sharedTables) {
+                    // ⭐⭐⭐ 테이블 타입별 가중치 적용 (Phase 2)
+                    TableSupportType tableType = classifyTableType(table);
+                    double typeWeight = getTableTypeWeight(tableType);
+                    
                     boolean bc1HasWrite = hasWriteOperation(bc1, table);
                     boolean bc2HasWrite = hasWriteOperation(bc2, table);
                     
                     if (bc1HasWrite && bc2HasWrite) {
                         // C/U/D 공유 = 매우 강한 트랜잭션 결합!
-                        strength += 20.0;
-                        log.debug("강한 결합 발견: {} <-> {} via {} (C/U/D 공유)", 
-                                bc1.getBcName(), bc2.getBcName(), table);
+                        strength += 20.0 * typeWeight;
+                        if (typeWeight < 1.0) {
+                            log.debug("약화된 결합: {} <-> {} via {} (타입: {}, 가중치: {})", 
+                                    bc1.getBcName(), bc2.getBcName(), table, tableType, typeWeight);
+                        } else {
+                            log.debug("강한 결합 발견: {} <-> {} via {} (C/U/D 공유)", 
+                                    bc1.getBcName(), bc2.getBcName(), table);
+                        }
                     } else if (bc1HasWrite || bc2HasWrite) {
                         // 한쪽만 쓰기 = 중간 강도
-                        strength += 5.0;
+                        strength += 5.0 * typeWeight;
                     } else {
                         // 둘 다 READ만 = 약한 연결
                         strength += 1.0;
@@ -470,7 +538,72 @@ public class DomainService {
     }
     
     /**
-     * 도메인 생성 (⭐ 이름 생성 개선)
+     * 도메인 타입 결정 ⭐⭐⭐ (Phase 1)
+     * 
+     * - Read/BFF Layer: 읽기 전용 (C/U/D 없음)
+     * - Platform Domain: 플랫폼/공통 서비스 (App, SDK, Push 등)
+     * - Core Domain: 일반 비즈니스 도메인
+     */
+    private String determineDomainType(
+            List<BoundedContextGroup> domainBCs,
+            Map<String, String> tableOwners) {
+        
+        // 1. 읽기 전용 체크 (모든 BC가 C/U/D 없음)
+        boolean allReadOnly = domainBCs.stream()
+                .allMatch(this::isReadOnlyBC);
+        
+        if (allReadOnly) {
+            return "Read/BFF Layer";
+        }
+        
+        // 2. 플랫폼 도메인 체크 (TAPP_* 테이블 또는 플랫폼 키워드)
+        boolean isPlatform = domainBCs.stream()
+                .anyMatch(bc -> {
+                    String name = bc.getBcName().toLowerCase();
+                    return name.contains("app") || name.contains("sdk") || 
+                           name.contains("push") || name.contains("플랫폼");
+                });
+        
+        // TAPP_ 테이블 소유 여부
+        long appTableCount = tableOwners.entrySet().stream()
+                .filter(e -> domainBCs.stream().anyMatch(bc -> bc.getBcName().equals(e.getValue())))
+                .filter(e -> e.getKey().toUpperCase().startsWith("TAPP_"))
+                .count();
+        
+        if (isPlatform || appTableCount >= 2) {
+            return "Platform Domain";
+        }
+        
+        // 3. 기본: 코어 도메인
+        return "Core Domain";
+    }
+    
+    /**
+     * BC가 읽기 전용인지 체크 (C/U/D 없음)
+     */
+    private boolean isReadOnlyBC(BoundedContextGroup bc) {
+        if (bc.getTableAccessMap() == null || bc.getTableAccessMap().isEmpty()) {
+            return true;  // 테이블 접근 없음 = 읽기 전용으로 간주
+        }
+        
+        // C/U/D가 하나라도 있으면 false
+        for (TableAccess ta : bc.getTableAccessMap().values()) {
+            if (ta.getOperations() == null) continue;
+            
+            for (TableAccess.CrudOperation op : ta.getOperations()) {
+                if (op == TableAccess.CrudOperation.CREATE ||
+                    op == TableAccess.CrudOperation.UPDATE ||
+                    op == TableAccess.CrudOperation.DELETE) {
+                    return false;
+                }
+            }
+        }
+        
+        return true;  // C/U/D가 하나도 없음 = 읽기 전용
+    }
+    
+    /**
+     * 도메인 생성 (⭐ 이름 생성 개선 + 도메인 타입 분류)
      */
     private Domain createDomain(
             int domainId,
@@ -485,6 +618,9 @@ public class DomainService {
         
         // ⭐ 도메인 이름 생성 (스마트)
         String domainName = generateDomainName(domainId, domainBCs, tableOwners);
+        
+        // ⭐⭐⭐ 도메인 타입 결정 (Phase 1)
+        String domainType = determineDomainType(domainBCs, tableOwners);
         
         // 소유 테이블
         Set<String> ownedTables = new HashSet<>();
@@ -568,6 +704,7 @@ public class DomainService {
         return Domain.builder()
                 .domainId(domainId)
                 .domainName(domainName)
+                .domainType(domainType)  // ⭐⭐⭐ Phase 1
                 .bcNames(new ArrayList<>(bcNames))
                 .bcCount(bcNames.size())
                 .ownedTables(new ArrayList<>(ownedTables))
@@ -690,6 +827,7 @@ public class DomainService {
     public static class Domain {
         private int domainId;
         private String domainName;
+        private String domainType;  // ⭐⭐⭐ Phase 1: "Core Domain", "Platform Domain", "Read/BFF Layer"
         private List<String> bcNames;
         private int bcCount;
         private List<String> ownedTables;

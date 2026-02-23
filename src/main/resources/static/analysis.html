@@ -667,7 +667,12 @@
         <!-- Domains Tab ⭐ NEW -->
         <div id="domains" class="tab-content">
             <div class="card">
-                <div class="card-title">📦 도메인 서비스 (BC → 도메인 묶기)</div>
+                <div class="card-title">
+                    📦 도메인 서비스 (BC → 도메인 묶기)
+                    <button onclick="deleteBcCache()" style="float: right; padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">
+                        🗑️ 캐시 삭제 & 재분석
+                    </button>
+                </div>
                 
                 <div style="background: #d1ecf1; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9em;">
                     💡 <strong>도메인 전략:</strong> 23개 BC → 5~8개 도메인 서비스 제안<br>

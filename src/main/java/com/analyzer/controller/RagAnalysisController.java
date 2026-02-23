@@ -48,6 +48,24 @@ public class RagAnalysisController {
     }
     
     /**
+     * BC 분석 캐시 삭제 ⭐⭐⭐
+     * DELETE /api/projects/{projectId}/rag/cache/bc-analysis
+     */
+    @DeleteMapping("/cache/bc-analysis")
+    public ResponseEntity<Map<String, Object>> deleteBcAnalysisCache(@PathVariable String projectId) {
+        log.info("BC 분석 캐시 삭제 요청 - projectId: {}", projectId);
+        
+        boolean deleted = ragAnalysisService.deleteBcAnalysisCache(projectId);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("projectId", projectId);
+        response.put("deleted", deleted);
+        response.put("message", deleted ? "BC 분석 캐시 삭제 완료" : "캐시 파일 없음");
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
      * RAG + AI: BC 자동 분석 (추천!) ⭐
      * POST /api/projects/{projectId}/rag/analyze-bc
      */

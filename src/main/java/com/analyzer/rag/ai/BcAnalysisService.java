@@ -44,6 +44,16 @@ public class BcAnalysisService {
     }
     
     /**
+     * BC 분석 캐시 삭제 ⭐⭐⭐
+     * 
+     * @param projectId 프로젝트 ID
+     * @return 삭제 성공 여부
+     */
+    public boolean deleteBcAnalysisCache(String projectId) {
+        return cacheService.deleteCache(projectId);
+    }
+    
+    /**
      * Bundle을 분석하여 BC 추천 (캐싱 지원)
      * 
      * @param bundle 검색 Bundle

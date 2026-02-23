@@ -684,12 +684,27 @@ function renderDomains() {
     `;
     
     // 도메인 리스트
-    list.innerHTML = domains.map((domain, index) => `
+    list.innerHTML = domains.map((domain, index) => {
+        // ⭐⭐⭐ 도메인 타입별 색상 및 배지 (Phase 1)
+        const domainTypeColors = {
+            'Core Domain': '#28a745',
+            'Platform Domain': '#007bff',
+            'Supporting Domain': '#6c757d',
+            'Read/BFF Layer': '#ffc107'
+        };
+        const domainTypeColor = domainTypeColors[domain.domainType] || '#667eea';
+        const domainTypeBadge = domain.domainType ? `
+            <span style="background: ${domainTypeColor}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8em; margin-left: 10px; vertical-align: middle;">
+                ${domain.domainType}
+            </span>
+        ` : '';
+        
+        return `
         <div class="rec-card" style="border: 3px solid #667eea; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15); margin-bottom: 30px;">
             <div class="rec-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; margin: -1px -1px 20px -1px;">
                 <div>
                     <div class="rec-title" style="color: white; font-size: 1.3em; font-weight: 700;">
-                        📦 ${escapeHtml(domain.domainName)}
+                        📦 ${escapeHtml(domain.domainName)}${domainTypeBadge}
                     </div>
                     <div style="color: rgba(255,255,255,0.9); font-size: 0.95em; margin-top: 8px;">
                         도메인 #${domain.domainId} · ${domain.bcCount}개 BC 포함
@@ -776,7 +791,7 @@ function renderDomains() {
             ` : ''}
             </div>  <!-- ⭐ padding 종료 -->
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // ⭐⭐⭐ 도메인 간 호출 관계 매트릭스 로딩
@@ -1047,5 +1062,41 @@ function renderDomainMatrix() {
                 <small>브라우저 콘솔을 확인하세요</small>
             </div>
         `;
+    }
+}
+
+// ⭐⭐⭐ BC 캐시 삭제 & 재분석
+async function deleteBcCache() {
+    if (!confirm('BC 분석 캐시를 삭제하고 재분석하시겠습니까?\n\n⏱️ 재분석 시간: 약 20분 소요')) {
+        return;
+    }
+    
+    try {
+        // 1. 캐시 삭제
+        const deleteRes = await fetch(`/api/projects/${projectId}/rag/cache/bc-analysis`, {
+            method: 'DELETE'
+        });
+        
+        if (!deleteRes.ok) {
+            throw new Error('캐시 삭제 실패: ' + deleteRes.status);
+        }
+        
+        const deleteData = await deleteRes.json();
+        console.log('캐시 삭제:', deleteData);
+        
+        // 2. BC 재분석 자동 실행
+        alert('✅ 캐시 삭제 완료!\n\n지금 BC 재분석을 시작합니다. (약 20분 소요)');
+        
+        // 캐시 초기화
+        bcGroups = null;
+        domains = null;
+        domainMatrix = null;
+        
+        // BC 그룹 탭으로 이동 & 재분석
+        switchTab('bc-groups');
+        
+    } catch (error) {
+        console.error('캐시 삭제 실패:', error);
+        alert('❌ 캐시 삭제 실패: ' + error.message);
     }
 }

@@ -48,6 +48,19 @@ public class RagAnalysisService {
     }
     
     /**
+     * BC 분석 캐시 삭제 ⭐⭐⭐
+     * 
+     * @param projectId 프로젝트 ID
+     * @return 삭제 성공 여부
+     */
+    public boolean deleteBcAnalysisCache(String projectId) {
+        log.info("BC 분석 캐시 삭제 - projectId: {}", projectId);
+        
+        // BcAnalysisService를 통해 캐시 삭제
+        return bcAnalysisService.deleteBcAnalysisCache(projectId);
+    }
+    
+    /**
      * 프로젝트를 RAG 시스템에 인덱싱
      * 
      * @param projectId 프로젝트 ID
