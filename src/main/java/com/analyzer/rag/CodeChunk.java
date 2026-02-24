@@ -111,6 +111,12 @@ public class CodeChunk {
     private List<TableAccess> tableAccesses;
     
     /**
+     * MyBatis Mapper 파싱 실패 원인 리포트 (DAO 컴포넌트에만 해당)
+     * 예: ["NS_MISMATCH: EmsDAO_SQL.xml", "<include refid> 사용 (테이블 누락 가능)"]
+     */
+    private List<String> mapperIssues;
+
+    /**
      * 패키지명
      */
     private String packageName;

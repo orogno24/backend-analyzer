@@ -661,36 +661,68 @@ function renderDomains() {
         list.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">도메인 데이터가 없습니다</div>';
         return;
     }
+
+    // ⭐ Quarantine(backlog) 분리: 마이크로서비스 후보 vs 분석 보류
+    const activeDomains  = domains.filter(d => !d.backlog);
+    const backlogDomains = domains.filter(d => d.backlog);
     
-    // 요약
-    const totalBCs = domains.reduce((sum, b) => sum + b.bcCount, 0);
-    const totalOwnedTables = new Set(domains.flatMap(b => b.ownedTables || [])).size;
+    // 요약 (Quarantine 제외 카운트)
+    const totalBCs = activeDomains.reduce((sum, b) => sum + b.bcCount, 0);
+    const totalOwnedTables = new Set(activeDomains.flatMap(b => b.ownedTables || [])).size;
+    const backlogBCs = backlogDomains.reduce((sum, b) => sum + b.bcCount, 0);
     
     summary.innerHTML = `
         <div class="summary-grid">
             <div class="summary-box" style="border-left-color: #667eea;">
-                <div class="summary-box-value">${domains.length}</div>
+                <div class="summary-box-value">${activeDomains.length}</div>
                 <div class="summary-box-label">추천 마이크로서비스 수</div>
             </div>
             <div class="summary-box" style="border-left-color: #28a745;">
                 <div class="summary-box-value">${totalBCs}</div>
-                <div class="summary-box-label">총 BC 수</div>
+                <div class="summary-box-label">총 BC 수 (활성)</div>
             </div>
             <div class="summary-box" style="border-left-color: #17a2b8;">
                 <div class="summary-box-value">${totalOwnedTables}</div>
                 <div class="summary-box-label">총 소유 테이블 수</div>
             </div>
+            ${backlogDomains.length > 0 ? `
+            <div class="summary-box" style="border-left-color: #dc3545;">
+                <div class="summary-box-value" style="color: #dc3545;">${backlogBCs}</div>
+                <div class="summary-box-label">분리 보류 BC (Backlog)</div>
+            </div>
+            ` : ''}
         </div>
+        ${backlogDomains.length > 0 ? `
+        <div style="margin-top: 10px; padding: 8px 14px; background: #fff5f5; border-radius: 8px; border-left: 3px solid #dc3545; font-size: 0.83em; color: #721c24;">
+            🚧 <strong>${backlogBCs}개 BC</strong>는 CUD 테이블 미검출로 분리 보류 처리됨 —
+            MyBatis Mapper XML 재검토 후 Core/Platform/Supporting으로 이동 권장
+        </div>
+        ` : ''}
     `;
     
-    // 도메인 리스트
-    list.innerHTML = domains.map((domain, index) => {
-        // ⭐⭐⭐ 도메인 타입별 색상 및 배지 (Phase 1)
+    // 활성 도메인 리스트
+    list.innerHTML = `
+        ${activeDomains.map((domain, index) => renderDomainCard(domain, index)).join('')}
+        ${backlogDomains.length > 0 ? `
+        <div style="margin: 30px 0 12px; padding: 10px 16px; background: #f8d7da; border-radius: 10px; border-left: 4px solid #dc3545;">
+            <div style="font-weight: 700; font-size: 1em; color: #721c24;">🚧 분석 보류 (Backlog)</div>
+            <div style="font-size: 0.82em; color: #856404; margin-top: 4px;">
+                아래 BC들은 현재 마이크로서비스 후보에서 제외됨. MyBatis Mapper 파싱 수정 후 재분류 필요.
+            </div>
+        </div>
+        ${backlogDomains.map((domain, index) => renderDomainCard(domain, activeDomains.length + index)).join('')}
+        ` : ''}
+    `;
+}
+
+function renderDomainCard(domain, index) {
+    // ⭐⭐⭐ 도메인 타입별 색상 및 배지 (Phase 1)
         const domainTypeColors = {
             'Core Domain': '#28a745',
             'Platform Domain': '#007bff',
             'Supporting Domain': '#6c757d',
-            'Read/BFF Layer': '#ffc107'
+            'Read/BFF Layer': '#e67e22',
+            '분석 필요 (Quarantine)': '#dc3545'
         };
         const domainTypeColor = domainTypeColors[domain.domainType] || '#667eea';
         const domainTypeBadge = domain.domainType ? `
@@ -699,15 +731,25 @@ function renderDomains() {
             </span>
         ` : '';
         
+        const isBacklog = domain.backlog === true;
+        const cardBorder = isBacklog ? '#dc3545' : '#667eea';
+        const headerBg  = isBacklog
+            ? 'background: linear-gradient(135deg, #c0392b 0%, #922b21 100%);'
+            : 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);';
+        const backlogBadge = isBacklog
+            ? `<span style="background: rgba(255,255,255,0.25); color: white; padding: 2px 10px; border-radius: 10px; font-size: 0.78em; margin-left: 8px; vertical-align: middle; border: 1px solid rgba(255,255,255,0.4);">🚧 분리 보류</span>`
+            : '';
+
         return `
-        <div class="rec-card" style="border: 3px solid #667eea; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15); margin-bottom: 30px;">
-            <div class="rec-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; margin: -1px -1px 20px -1px;">
+        <div class="rec-card" style="border: 3px solid ${cardBorder}; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15); margin-bottom: 30px;">
+            <div class="rec-header" style="${headerBg} padding: 20px; margin: -1px -1px 20px -1px;">
                 <div>
                     <div class="rec-title" style="color: white; font-size: 1.3em; font-weight: 700;">
-                        📦 ${escapeHtml(domain.domainName)}${domainTypeBadge}
+                        📦 ${escapeHtml(domain.domainName)}${domainTypeBadge}${backlogBadge}
                     </div>
                     <div style="color: rgba(255,255,255,0.9); font-size: 0.95em; margin-top: 8px;">
-                        도메인 #${domain.domainId} · ${domain.bcCount}개 BC 포함
+                        ${isBacklog ? '🚧 분리 보류 (Backlog)' : `도메인 #${domain.domainId}`} · ${domain.bcCount}개 BC 포함
+                        ${isBacklog ? ' — 마이크로서비스 후보 제외' : ''}
                     </div>
                 </div>
             </div>
@@ -789,9 +831,122 @@ function renderDomains() {
                 </div>
             </div>
             ` : ''}
+
+            ${domain.hasAnalysisIncomplete ? `
+            <div style="border-left: 3px solid #dc3545; background: #fff5f5; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px;">
+                <div style="color: #dc3545; font-weight: 600; font-size: 0.85em; margin-bottom: 4px;">🔴 분석 불완전 (Quarantine)</div>
+                <div style="font-size: 0.82em; color: #6c1a1a;">쓰기 키워드가 있으나 CUD 테이블이 탐지되지 않음 → MyBatis Mapper 파싱 누락 또는 동적 SQL 의심</div>
+            </div>
+            ` : ''}
+
+            ${domain.readOnlyConfirmed ? `
+            <div style="border-left: 3px solid #17a2b8; background: #f0fbff; padding: 8px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 0.82em; color: #0c5460;">
+                ✅ CUD 없음 확정 (READ_CONFIRMED) — Read/BFF 배치 적합
+            </div>
+            ` : ''}
+
+            ${domain.domainType === 'Read/BFF Layer' && (domain.readDependencyTables && domain.readDependencyTables.length > 0) ? `
+            <div style="margin-bottom: 15px;">
+                <div style="font-size: 0.82em; font-weight: 600; color: #17a2b8; margin-bottom: 6px;">
+                    📖 Read Dependency Tables (${domain.readDependencyTables.length}개)
+                    <span style="font-size: 0.8em; font-weight: 400; color: #888; margin-left: 6px;">— 직접 접근하는 Core 테이블</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    ${domain.readDependencyTables.map(t => `
+                        <span style="background: #e3f6fc; color: #0c5460; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace;">${escapeHtml(t)}</span>
+                    `).join('')}
+                </div>
+                ${domain.readModelCandidates && domain.readModelCandidates.length > 0 ? `
+                <div style="margin-top: 10px; font-size: 0.8em; font-weight: 600; color: #155724; margin-bottom: 5px;">
+                    🎯 Read Model 구축 후보 (${domain.readModelCandidates.length}개)
+                    <span style="font-size: 0.8em; font-weight: 400; color: #888; margin-left: 6px;">— 2개 이상 BFF BC가 공유 접근</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px;">
+                    ${domain.readModelCandidates.map(t => `
+                        <span style="background: #d4edda; color: #155724; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; border: 1px solid #c3e6cb;">★ ${escapeHtml(t)}</span>
+                    `).join('')}
+                </div>
+                <div style="font-size: 0.75em; color: #888; margin-top: 4px;">→ Materialized View 또는 CQRS Read Store 분리 권장</div>
+                ` : ''}
+            </div>
+            ` : ''}
+
+            ${domain.placementReason ? `
+            <div style="font-size: 0.78em; color: #888; margin-bottom: 10px; padding: 4px 8px; background: #f8f9fa; border-radius: 4px; font-family: monospace;">
+                📌 배치 근거: ${escapeHtml(domain.placementReason)}
+            </div>
+            ` : ''}
+
+            ${domain.warnings && domain.warnings.length > 0 ? `
+            <div class="rec-section" style="border-left: 3px solid #e67e22; background: #fff8f0; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <div class="rec-section-title" style="color: #e67e22;">⚠️ 재배치/타입 경고 (${domain.warnings.length}개)</div>
+                <div>
+                    ${domain.warnings.map(w => `
+                        <div style="font-size: 0.85em; color: #7d4e00; padding: 4px 0; white-space: pre-wrap;">${escapeHtml(w)}</div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            ${/* ===== Read/BFF: Read Dependency 섹션 ===== */
+            (domain.domainType === 'Read/BFF Layer' && domain.readDependencyTables && domain.readDependencyTables.length > 0) ? `
+            <div class="rec-section" style="border-left: 3px solid #17a2b8; background: #f0fbff; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <div class="rec-section-title" style="color: #0c5460; margin-bottom: 8px;">📖 Read Dependency 테이블 (${domain.readDependencyTables.length}개)</div>
+                <div style="font-size: 0.82em; color: #555; margin-bottom: 8px;">Core 서비스 테이블을 직접 READ 접근 중 → Event-Driven 또는 API 호출로 전환 검토</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    ${domain.readDependencyTables.map(t => `<span style="background:#d1ecf1; color:#0c5460; padding:2px 8px; border-radius:10px; font-size:0.8em; font-family:monospace;">${escapeHtml(t)}</span>`).join('')}
+                </div>
+                ${domain.readModelCandidates && domain.readModelCandidates.length > 0 ? `
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #bee5eb;">
+                    <div style="font-size: 0.82em; font-weight: 600; color: #0c5460; margin-bottom: 6px;">🎯 Read Model 구축 후보 (${domain.readModelCandidates.length}개, 복수 BC 조회)</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${domain.readModelCandidates.map(t => `<span style="background:#0c5460; color:#fff; padding:2px 8px; border-radius:10px; font-size:0.8em; font-family:monospace;">${escapeHtml(t)}</span>`).join('')}
+                    </div>
+                    <div style="font-size: 0.78em; color: #555; margin-top: 4px;">→ Materialized View 또는 별도 Read Store(Redis/ES) 적용 권장</div>
+                </div>
+                ` : ''}
+            </div>
+            ` : ''}
+
+            ${/* ===== Quarantine 상세 원인 리포트 ===== */
+            domain.hasAnalysisIncomplete && domain.warnings && domain.warnings.some(w => w.includes('━━')) ? `
+            <details style="margin-bottom: 15px;" open>
+                <summary style="cursor: pointer; padding: 10px; background: #fff5f5; border-radius: 8px; font-size: 0.9em; font-weight: 600; color: #dc3545;">
+                    🔬 Mapper 파싱 실패 원인 분석
+                </summary>
+                <div style="margin-top: 8px; padding: 12px; background: #fff5f5; border-radius: 8px; border-left: 3px solid #dc3545; font-size: 0.82em; font-family: monospace; white-space: pre-wrap; color: #333;">
+                    ${domain.warnings.filter(w => w.startsWith('━━') || w.startsWith('  ')).map(w => escapeHtml(w)).join('\n')}
+                </div>
+            </details>
+            ` : ''}
+
+            ${domain.classificationReasons && domain.classificationReasons.length > 0 ? `
+            <details style="margin-bottom: 15px;">
+                <summary style="cursor: pointer; padding: 10px; background: #f8f9fa; border-radius: 8px; font-size: 0.9em; font-weight: 600; color: #495057;">
+                    🔍 분류 근거 보기 (${domain.classificationReasons.length}개)
+                </summary>
+                <div style="margin-top: 8px; padding: 12px; background: #f8f9fa; border-radius: 8px; border-left: 3px solid #6c757d;">
+                    ${domain.classificationReasons.map(reason => `
+                        <div style="font-size: 0.85em; color: #555; padding: 3px 0; border-bottom: 1px solid #e9ecef; white-space: pre-wrap;">${escapeHtml(reason)}</div>
+                    `).join('')}
+                </div>
+            </details>
+            ` : ''}
+
+            ${domain.bcNames && domain.bcNames.length > 0 ? `
+            <details style="margin-bottom: 15px;">
+                <summary style="cursor: pointer; padding: 10px; background: #f0f4ff; border-radius: 8px; font-size: 0.9em; font-weight: 600; color: #3a4bcc;">
+                    🗺️ BC ↔ 테이블 연결도 보기
+                </summary>
+                <div style="margin-top: 8px; overflow-x: auto;">
+                    ${renderBcTableGraph(domain)}
+                </div>
+            </details>
+            ` : ''}
+
             </div>  <!-- ⭐ padding 종료 -->
         </div>
-    `}).join('');
+    `;
 }
 
 // ⭐⭐⭐ 도메인 간 호출 관계 매트릭스 로딩
@@ -853,8 +1008,8 @@ function renderDomainMatrix() {
         // 요약
         const totalInteractions = Object.values(interactions).reduce((sum, targets) => 
             sum + Object.values(targets).reduce((s, count) => s + count, 0), 0);
-        const avgCohesion = Object.values(stats).length > 0 
-            ? Object.values(stats).reduce((sum, s) => sum + (s.cohesion || 0), 0) / domains.length 
+        const avgInternalCallRatio = Object.values(stats).length > 0 
+            ? Object.values(stats).reduce((sum, s) => sum + (s.internalCallRatio || s.cohesion || 0), 0) / domains.length 
             : 0;
         
         // 요약 - ⭐ 내부/외부 분리
@@ -882,9 +1037,9 @@ function renderDomainMatrix() {
                 <div class="summary-box-value">${totalCommonCalls}</div>
                 <div class="summary-box-label">공통/유틸 호출</div>
             </div>
-            <div class="summary-box" style="border-left-color: ${avgCohesion >= 0.5 ? '#28a745' : (avgCohesion >= 0.3 ? '#ffc107' : '#dc3545')};">
-                <div class="summary-box-value">${(avgCohesion * 100).toFixed(0)}%</div>
-                <div class="summary-box-label">평균 응집도</div>
+            <div class="summary-box" style="border-left-color: ${avgInternalCallRatio >= 0.5 ? '#28a745' : (avgInternalCallRatio >= 0.3 ? '#ffc107' : '#dc3545')};">
+                <div class="summary-box-value">${(avgInternalCallRatio * 100).toFixed(0)}%</div>
+                <div class="summary-box-label">평균 InternalCallRatio</div>
             </div>
         </div>
         <div style="margin-top: 15px; padding: 12px; background: #e7f3ff; border-left: 4px solid #0066cc; border-radius: 8px; font-size: 0.9em;">
@@ -894,7 +1049,8 @@ function renderDomainMatrix() {
             ${crossDomainInteractions < 20 ? '<br>→ ✅ <strong>도메인 경계 양호</strong> (외부 호출 결합 낮음)' : 
                 crossDomainInteractions < 40 ? '<br>→ ⚠️ <strong>중간</strong> (일부 강결합 검토 필요)' : 
                 '<br>→ 🚨 <strong>강결합 위험</strong> (도메인 경계 재설계 필요)'}<br>
-            • <strong>공통/유틸 호출 ${totalCommonCalls}회</strong> = 노이즈 제거됨 (Comm*, Common*, Util*, Egov* 등은 별도 분류)
+            • <strong>공통/유틸 호출 ${totalCommonCalls}회</strong> = 노이즈 제거됨 (Comm*, Common*, Util*, Egov* 등은 별도 분류)<br>
+            • 📊 <strong>DataCoupling</strong>(테이블 직접 접근) / 🔄 <strong>TxCoupling</strong>(분산 Tx 위험) 매트릭스는 아래 섹션 참조
         </div>
     `;
     
@@ -927,29 +1083,42 @@ function renderDomainMatrix() {
         domains.forEach(callee => {
             const count = interactions[caller]?.[callee] || 0;
             const isSelf = (caller === callee);
+            const callDetails = domainMatrix.callDetails?.[caller]?.[callee] || [];
             
             let bgColor = '#ffffff';
             let textColor = '#000';
-            let displayText = count === 0 ? '0' : count;  // ⭐ "-" 대신 "0"
+            let displayText = count === 0 ? '0' : count;
             
             if (isSelf && count > 0) {
-                // 대각선 (Self-invocation)
-                bgColor = '#d4edda';
-                textColor = '#155724';
-                displayText = `[${count}]`;  // ⭐ 볼드 제거 (font-weight는 td 스타일에서 제어)
+                bgColor = '#d4edda'; textColor = '#155724';
+                displayText = `[${count}]`;
             } else if (count >= 5) {
-                // 강결합 (위험)
-                bgColor = '#f8d7da';
-                textColor = '#721c24';
+                bgColor = '#f8d7da'; textColor = '#721c24';
             } else if (count > 0) {
-                // 정상 호출
-                bgColor = '#fff3cd';
-                textColor = '#856404';
+                bgColor = '#fff3cd'; textColor = '#856404';
             }
+
+            // 클릭 시 호출 메서드 상세 보기 (cross-domain + call count > 0)
+            const hasDetail = !isSelf && callDetails.length > 0;
+            const detailId = `detail-${caller.replace(/\s/g,'-')}-${callee.replace(/\s/g,'-')}`;
+            const queryCount   = callDetails.filter(d => d.startsWith('[QUERY]')).length;
+            const commandCount = callDetails.filter(d => d.startsWith('[COMMAND]')).length;
+            const typeBadge = hasDetail
+                ? `<br><span style="font-size:0.7em;">${queryCount>0?'Q:'+queryCount:''}${commandCount>0?(queryCount>0?' ':' ')+'C:'+commandCount:''}</span>`
+                : '';
             
-            tableHTML += `<td style="padding: 12px; border: 1px solid #dee2e6; text-align: center; background: ${bgColor}; color: ${textColor};">
-                ${displayText}
-            </td>`;
+            tableHTML += `<td style="padding: 8px; border: 1px solid #dee2e6; text-align: center; background: ${bgColor}; color: ${textColor}; ${hasDetail ? 'cursor:pointer;' : ''}">`;
+            if (hasDetail) {
+                tableHTML += `<div onclick="toggleCallDetail('${detailId}')" title="클릭: 호출 상세 보기">
+                    ${displayText}${typeBadge}
+                </div>
+                <div id="${detailId}" style="display:none; text-align:left; font-size:0.75em; max-height:180px; overflow-y:auto; background:#fffde7; border:1px solid #ffc107; border-radius:4px; padding:6px; margin-top:4px; white-space:nowrap;">
+                    ${callDetails.map(d => `<div style="padding:1px 0; border-bottom:1px solid #f0e0a0;">${escapeHtml(d)}</div>`).join('')}
+                </div>`;
+            } else {
+                tableHTML += displayText;
+            }
+            tableHTML += `</td>`;
         });
         
         tableHTML += '</tr>';
@@ -957,14 +1126,14 @@ function renderDomainMatrix() {
     
     tableHTML += '</tbody></table></div>';
     
-    // ⭐ 응집도 설명 추가
     tableHTML += `
         <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 0.85em;">
             <strong>💡 해석 가이드:</strong><br>
             • <span style="background: #d4edda; padding: 2px 8px; border-radius: 4px; font-weight: 600;">[N]</span> 대각선 = 도메인 내부 호출 (높을수록 좋음 ✅)<br>
-            • <span style="background: #fff3cd; padding: 2px 8px; border-radius: 4px;">1~4</span> = 정상 협력 관계<br>
-            • <span style="background: #f8d7da; padding: 2px 8px; border-radius: 4px; font-weight: 600;">5+</span> = 강결합 위험 (통합 검토 필요 🚨)<br>
-            • <strong>평균 응집도 ${(avgCohesion * 100).toFixed(0)}%</strong> = 내부 호출 / (내부 + 외부 호출) - 낮으면 도메인 경계 재검토
+            • <span style="background: #fff3cd; padding: 2px 8px; border-radius: 4px;">1~4</span> = 정상 협력 &nbsp;
+            • <span style="background: #f8d7da; padding: 2px 8px; border-radius: 4px; font-weight: 600;">5+</span> = 강결합 위험 🚨<br>
+            • <strong>평균 InternalCallRatio ${(avgInternalCallRatio * 100).toFixed(0)}%</strong> = 내부호출 / (내부+외부) &nbsp;
+            • 숫자 클릭 → 호출 메서드 상세 (Q:조회 / C:명령)
         </div>
     `;
     
@@ -991,8 +1160,9 @@ function renderDomainMatrix() {
         </div>
         `;
         Object.values(stats).forEach(stat => {
-            const cohesionPercent = (stat.cohesion * 100).toFixed(0);
-            const cohesionColor = stat.cohesion >= 0.7 ? '#28a745' : (stat.cohesion >= 0.5 ? '#ffc107' : '#dc3545');
+            const icrValue = stat.internalCallRatio ?? stat.cohesion ?? 0;
+            const icrPercent = (icrValue * 100).toFixed(0);
+            const icrColor = icrValue >= 0.7 ? '#28a745' : (icrValue >= 0.5 ? '#ffc107' : '#dc3545');
             
             // ⭐ 허브 도메인 감지
             const isHub = stat.inboundCalls >= 5;
@@ -1022,8 +1192,8 @@ function renderDomainMatrix() {
                             <div style="font-size: 0.8em; color: #666;">공통 호출</div>
                         </div>
                         <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 8px;">
-                            <div style="font-size: 1.5em; font-weight: 700; color: ${cohesionColor};">${cohesionPercent}%</div>
-                            <div style="font-size: 0.8em; color: #666;">응집도</div>
+                            <div style="font-size: 1.5em; font-weight: 700; color: ${icrColor};">${icrPercent}%</div>
+                            <div style="font-size: 0.8em; color: #666;">InternalCallRatio</div>
                         </div>
                     </div>
                     
@@ -1051,7 +1221,15 @@ function renderDomainMatrix() {
         
         document.getElementById('domainMatrixStatistics').innerHTML = statsHTML;
     }
-    
+
+    // ===== DataCoupling 매트릭스 =====
+    const dataCoupling = domainMatrix.dataCoupling || {};
+    renderDataCouplingMatrix(domains, dataCoupling);
+
+    // ===== TxCoupling 위험 =====
+    const txRisks = domainMatrix.txCouplingRisks || [];
+    renderTxCouplingRisks(txRisks);
+
     console.log('매트릭스 렌더링 완료');
     
     } catch (error) {
@@ -1063,6 +1241,303 @@ function renderDomainMatrix() {
             </div>
         `;
     }
+}
+
+// ===== DataCoupling 매트릭스 렌더링 =====
+function renderDataCouplingMatrix(domains, dataCoupling) {
+    const container = document.getElementById('dataCouplingContainer');
+    if (!container) return;
+
+    const anyData = Object.keys(dataCoupling).length > 0;
+    if (!anyData) {
+        container.innerHTML = `<div style="color:#999; padding:16px; text-align:center;">DataCoupling 데이터 없음 (소유 테이블 매핑이 없거나 도메인 간 테이블 접근 없음)</div>`;
+        return;
+    }
+
+    let html = `
+    <div class="card-title">📊 DataCoupling Matrix <small style="font-weight:normal; color:#666;">(Domain A → Domain B 소유 테이블 접근 횟수 / R=1pt · CUD=3pt)</small></div>
+    <div style="overflow-x:auto; border:1px solid #dee2e6; border-radius:8px; margin-bottom:16px;">
+    <table style="width:max-content; min-width:100%; border-collapse:collapse; font-size:0.82em;">
+    <thead><tr style="background:#f8f9fa;">
+        <th style="padding:10px 14px; border:1px solid #dee2e6; text-align:left; position:sticky; left:0; background:#f8f9fa; z-index:10; min-width:180px;">
+            Accessor ↓ / Owner →
+        </th>`;
+
+    domains.forEach(d => {
+        html += `<th style="padding:10px 8px; border:1px solid #dee2e6; text-align:center; min-width:130px; white-space:nowrap;">${escapeHtml(d)}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    domains.forEach(caller => {
+        html += `<tr><td style="padding:10px 14px; border:1px solid #dee2e6; font-weight:600; position:sticky; left:0; background:#fff; z-index:5; white-space:nowrap;">${escapeHtml(caller)}</td>`;
+        domains.forEach(callee => {
+            const entry = dataCoupling[caller]?.[callee];
+            if (!entry || (entry.readCount === 0 && entry.cudCount === 0)) {
+                const isSelf = caller === callee;
+                html += `<td style="padding:10px; border:1px solid #dee2e6; text-align:center; background:${isSelf ? '#f0f0f0' : '#fff'}; color:#ccc;">${isSelf ? '—' : '0'}</td>`;
+            } else {
+                const weight = entry.totalWeight || 0;
+                const hasCud = entry.cudCount > 0;
+                const bg = hasCud ? (weight >= 10 ? '#f8d7da' : '#fff3cd') : '#e8f4f8';
+                const color = hasCud ? (weight >= 10 ? '#721c24' : '#856404') : '#0c5460';
+                const tables = (entry.accessedTables || []).join(', ');
+                html += `<td style="padding:8px; border:1px solid #dee2e6; text-align:center; background:${bg}; color:${color}; cursor:help;" title="${escapeHtml(tables)}">
+                    <div style="font-weight:700;">${weight}pt</div>
+                    <div style="font-size:0.8em;">R:${entry.readCount} / CUD:${entry.cudCount}</div>
+                </td>`;
+            }
+        });
+        html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>
+    <div style="padding:10px 14px; background:#e7f3ff; border-left:4px solid #0066cc; border-radius:8px; font-size:0.83em;">
+        💡 <strong>R(읽기)=1pt / C+U+D(쓰기)=3pt each</strong> · 셀 마우스오버 → 대상 테이블 목록<br>
+        • <span style="background:#f8d7da; padding:1px 6px; border-radius:4px;">10pt+</span> = 강한 데이터 결합 🚨 &nbsp;
+        • <span style="background:#fff3cd; padding:1px 6px; border-radius:4px;">CUD</span> = 쓰기 결합 (분리 시 분산 Tx 위험) &nbsp;
+        • <span style="background:#e8f4f8; padding:1px 6px; border-radius:4px;">R</span> = 읽기 접근 (Read Model/API 분리 가능)
+    </div>`;
+
+    container.innerHTML = html;
+}
+
+// ===== TxCoupling 위험 렌더링 =====
+function renderTxCouplingRisks(txRisks) {
+    const container = document.getElementById('txCouplingContainer');
+    if (!container) return;
+
+    if (!txRisks || txRisks.length === 0) {
+        container.innerHTML = `<div style="padding:12px; background:#d4edda; border-left:4px solid #28a745; border-radius:8px; font-size:0.9em;">✅ @Transactional 내 다중 도메인 CUD 감지 없음 (분산 트랜잭션 위험 낮음)</div>`;
+        return;
+    }
+
+    let html = `<div class="card-title">🔄 TxCoupling 위험 <small style="font-weight:normal;color:#666;">(@Transactional 스코프에서 다중 도메인 테이블 CUD)</small></div>
+    <div style="margin-bottom:12px; padding:10px 14px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:8px; font-size:0.85em;">
+        ⚠️ 아래 BC는 <strong>하나의 @Transactional 메서드 내에서</strong> 여러 도메인의 테이블에 C/U/D를 수행합니다.<br>
+        마이크로서비스 분리 시 <strong>분산 트랜잭션(2PC·Saga 패턴)</strong>이 필요하게 됩니다.
+    </div>`;
+
+    txRisks.forEach(risk => {
+        const isHigh = risk.riskLevel === 'HIGH';
+        const borderColor = isHigh ? '#dc3545' : '#ffc107';
+        const badgeColor = isHigh ? '#dc3545' : '#856404';
+        html += `
+        <div style="margin-bottom:14px; padding:14px; border:2px solid ${borderColor}; border-radius:10px; background:${isHigh ? '#fff5f5' : '#fffdf0'};">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <span style="font-weight:700; font-size:1.05em;">${escapeHtml(risk.bcName)}</span>
+                <span style="background:${badgeColor}; color:#fff; padding:2px 10px; border-radius:10px; font-size:0.8em;">${risk.riskLevel}</span>
+                <span style="color:#888; font-size:0.85em;">도메인: ${escapeHtml(risk.domainName)}</span>
+            </div>
+            <div style="font-size:0.85em; color:#555; margin-bottom:8px;">🔧 <strong>Service:</strong> ${escapeHtml(risk.serviceName || '-')}</div>
+            <div style="font-size:0.85em; margin-bottom:6px;">
+                <strong>🌐 관여 도메인 (CUD 대상):</strong>
+                ${(risk.involvedDomains || []).map(d => `<span style="background:#ffeeba; padding:2px 8px; border-radius:8px; margin:2px;">${escapeHtml(d)}</span>`).join('')}
+            </div>
+            <div style="font-size:0.82em; background:#f8f9fa; border-radius:6px; padding:8px;">
+                ${Object.entries(risk.tablesByDomain || {}).map(([dom, tables]) =>
+                    `<div><strong>${escapeHtml(dom)}:</strong> <code>${escapeHtml(tables)}</code></div>`
+                ).join('')}
+            </div>
+            <div style="margin-top:10px; padding:8px; background:#e7f3ff; border-radius:6px; font-size:0.82em; color:#0066cc;">
+                💡 <strong>해결 전략:</strong> Saga 패턴(Choreography) 또는 Outbox 패턴으로 분산 Tx 처리, 또는 해당 BC를 단일 도메인으로 통합 후 분리
+            </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+// ===== BC ↔ 테이블 연결도 SVG 렌더링 =====
+function renderBcTableGraph(domain) {
+    const links    = domain.bcTableLinks || [];
+    const ownedSet = new Set(domain.ownedTables || []);
+
+    // ① BC 목록: domain.bcNames 기준 (테이블 없는 BC도 포함)
+    const allBcNames = domain.bcNames || [];
+    // links에만 있는 BC가 혹시 있으면 추가 (방어)
+    const extraBcs = links.map(l => l.bcName).filter(b => !allBcNames.includes(b));
+    const bcs = [...allBcNames, ...new Set(extraBcs)];
+
+    // ② Table 목록: links 기준 (소유 테이블 우선 정렬, 그 다음 나머지)
+    const tablesFromLinks = [...new Set(links.map(l => l.tableName))];
+    const owned    = tablesFromLinks.filter(t => ownedSet.has(t)).sort();
+    const accessed = tablesFromLinks.filter(t => !ownedSet.has(t)).sort();
+    const tables   = [...owned, ...accessed];
+
+    if (bcs.length === 0) return '<div style="color:#999;padding:12px;">BC 데이터 없음</div>';
+
+    // ─── 레이아웃 상수 ───
+    const ROW_H  = 36;
+    const NODE_H = 28;
+    const BC_W   = 210;
+    const TBL_W  = 210;
+    const PAD_V  = 28;   // 상단(레이블) 여백
+    const LEG_H  = 22;   // 하단 범례 여백
+    const GAP_H  = tables.length > 0 ? 150 : 0;  // 테이블이 없으면 간격 0
+
+    const bcColX  = 10;
+    const tblColX = bcColX + BC_W + GAP_H;
+    const svgW    = tables.length > 0 ? tblColX + TBL_W + 10 : bcColX + BC_W + 10;
+
+    const bcCount  = bcs.length;
+    const tblCount = tables.length;
+    const svgH     = Math.max(bcCount, tblCount || 1) * ROW_H + PAD_V + LEG_H + 10;
+
+    // Y 좌표 (작은 쪽은 세로 중앙 정렬)
+    const bcTotalH  = bcCount  * ROW_H;
+    const tblTotalH = tblCount * ROW_H;
+    const bcOffY    = PAD_V + Math.max(0, (svgH - PAD_V - LEG_H - bcTotalH)  / 2);
+    const tblOffY   = PAD_V + Math.max(0, (svgH - PAD_V - LEG_H - tblTotalH) / 2);
+
+    const bcY  = i => bcOffY  + i * ROW_H;
+    const tblY = i => tblOffY + i * ROW_H;
+
+    // 인덱스 맵
+    const bcIdx  = Object.fromEntries(bcs.map((b, i)   => [b, i]));
+    const tblIdx = Object.fromEntries(tables.map((t, i) => [t, i]));
+
+    // ─── 연결선 ───
+    // BC별 연결선 개수 집계 (겹침 방지를 위한 Y 오프셋 계산용)
+    const bcLinkCount = {};
+    links.forEach(l => { bcLinkCount[l.bcName] = (bcLinkCount[l.bcName] || 0) + 1; });
+
+    let edges = '';
+    // BC별로 선을 묶어서 부채꼴로 퍼지게 (Y 오프셋 적용)
+    const bcLinkSeen = {};
+    links.forEach(link => {
+        const bcI  = bcIdx[link.bcName];
+        const tblI = tblIdx[link.tableName];
+        if (bcI === undefined || tblI === undefined) return;
+
+        const total = bcLinkCount[link.bcName] || 1;
+        bcLinkSeen[link.bcName] = (bcLinkSeen[link.bcName] || 0) + 1;
+        const seq = bcLinkSeen[link.bcName] - 1;
+        // 선이 여러 개면 BC 노드 우측 엣지를 위아래로 분산
+        const spread = Math.min(NODE_H * 0.4, (NODE_H / (total + 1)) * (seq + 1) - NODE_H / 2);
+
+        const hasCUD = link.ops.some(o => o !== 'R');
+        const stroke = hasCUD ? (link.owned ? '#e74c3c' : '#f39c12') : '#3498db';
+        const dash   = hasCUD ? 'none' : '5,3';
+        const sw     = hasCUD ? 2.0 : 1.5;
+
+        const x1  = bcColX + BC_W;
+        const y1  = bcY(bcI) + NODE_H / 2 + spread;
+        const x2  = tblColX;
+        const y2  = tblY(tblI) + NODE_H / 2;
+        const cx1 = x1 + GAP_H * 0.4;
+        const cx2 = x2 - GAP_H * 0.4;
+
+        edges += `<path d="M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2}"
+            fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-dasharray="${dash}" opacity="0.8">
+            <title>${link.bcName} → ${link.tableName} [${link.ops.join('')}]</title>
+        </path>`;
+    });
+
+    // ─── BC 노드 ───
+    let bcNodes = '';
+    bcs.forEach((bc, i) => {
+        const y = bcY(i);
+        const hasLinks = links.some(l => l.bcName === bc);
+        const fill   = hasLinks ? '#ebf0ff' : '#f0f0f0';
+        const stroke = hasLinks ? '#667eea' : '#adb5bd';
+        const textColor = hasLinks ? '#2c3e50' : '#999';
+        // BC명에서 " BC" 접미사 제거해서 표시
+        const label = bc.replace(/ BC$/, '');
+        // 너비 초과 시 말줄임 (SVG는 clip-path 대신 text 잘라서 표기)
+        const maxLen = 22;
+        const displayLabel = label.length > maxLen ? label.slice(0, maxLen) + '…' : label;
+        bcNodes += `
+        <g>
+            <rect x="${bcColX}" y="${y}" width="${BC_W}" height="${NODE_H}"
+                rx="6" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+            <text x="${bcColX + BC_W/2}" y="${y + NODE_H*0.66}"
+                font-size="11" fill="${textColor}" text-anchor="middle"
+                font-family="system-ui,sans-serif">
+                <title>${escapeHtml(bc)}</title>
+                ${escapeHtml(displayLabel)}
+            </text>
+        </g>`;
+    });
+
+    // ─── Table 노드 ───
+    let tblNodes = '';
+    tables.forEach((tbl, i) => {
+        const y       = tblY(i);
+        const isOwned = ownedSet.has(tbl);
+        const fill    = isOwned ? '#fff0f0' : '#f8f9fa';
+        const stroke  = isOwned ? '#e74c3c' : '#adb5bd';
+        const dot     = isOwned ? '● ' : '○ ';
+        const dotCol  = isOwned ? '#e74c3c' : '#adb5bd';
+        const maxLen  = 22;
+        const displayTbl = tbl.length > maxLen ? tbl.slice(0, maxLen) + '…' : tbl;
+        tblNodes += `
+        <g>
+            <rect x="${tblColX}" y="${y}" width="${TBL_W}" height="${NODE_H}"
+                rx="5" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+            <text x="${tblColX + 6}" y="${y + NODE_H*0.66}"
+                font-size="10.5" fill="${dotCol}" text-anchor="start"
+                font-family="monospace,system-ui">${dot}</text>
+            <text x="${tblColX + 18}" y="${y + NODE_H*0.66}"
+                font-size="10.5" fill="#333" text-anchor="start"
+                font-family="monospace,system-ui">
+                <title>${escapeHtml(tbl)}</title>
+                ${escapeHtml(displayTbl)}
+            </text>
+        </g>`;
+    });
+
+    // ─── 헤더 레이블 ───
+    const headerBC  = `<text x="${bcColX + BC_W/2}"  y="18" font-size="11" fill="#667eea" font-weight="700" text-anchor="middle" font-family="system-ui">Bounded Context (${bcs.length})</text>`;
+    const headerTBL = tables.length > 0
+        ? `<text x="${tblColX + TBL_W/2}" y="18" font-size="11" fill="#555"    font-weight="700" text-anchor="middle" font-family="system-ui">DB Table (${tables.length})</text>`
+        : '';
+
+    // ─── 범례 ───
+    const legendY = svgH - LEG_H + 6;
+    const legend = tables.length > 0 ? `
+        <g transform="translate(${bcColX}, ${legendY})">
+            <line x1="0" y1="5" x2="20" y2="5" stroke="#e74c3c" stroke-width="2"/>
+            <text x="24" y="9" font-size="10" fill="#555" font-family="system-ui">소유 CUD</text>
+            <line x1="82" y1="5" x2="102" y2="5" stroke="#f39c12" stroke-width="2"/>
+            <text x="106" y="9" font-size="10" fill="#555" font-family="system-ui">외부 CUD</text>
+            <line x1="170" y1="5" x2="190" y2="5" stroke="#3498db" stroke-width="1.6" stroke-dasharray="5,3"/>
+            <text x="194" y="9" font-size="10" fill="#555" font-family="system-ui">READ only</text>
+            <circle cx="265" cy="5" r="4" fill="none" stroke="#adb5bd" stroke-width="1.5"/>
+            <text x="272" y="9" font-size="10" fill="#999" font-family="system-ui">접근 테이블</text>
+            <circle cx="345" cy="5" r="4" fill="#e74c3c" stroke="#e74c3c"/>
+            <text x="352" y="9" font-size="10" fill="#e74c3c" font-family="system-ui">소유 테이블</text>
+        </g>` : '';
+
+    const noTableNote = tables.length === 0
+        ? `<text x="${bcColX + BC_W/2}" y="${svgH - LEG_H + 10}" font-size="10.5" fill="#adb5bd" text-anchor="middle" font-family="system-ui">DB 테이블 접근 데이터 없음 (Mapper 미검출 또는 Read-only)</text>`
+        : '';
+
+    const noLinkBcCount = bcs.filter(b => !links.some(l => l.bcName === b)).length;
+    return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}"
+         style="min-width:${Math.min(svgW, 620)}px; width:100%; max-width:${svgW}px;
+                display:block; background:#fafafa; border-radius:10px; border:1px solid #dee2e6; overflow:visible;">
+        ${headerBC}${headerTBL}
+        ${edges}
+        ${bcNodes}
+        ${tblNodes}
+        ${legend}
+        ${noTableNote}
+    </svg>
+    <div style="font-size:0.77em; color:#666; padding:6px 8px; background:#f8f9fa; border-radius:0 0 10px 10px; border:1px solid #dee2e6; border-top:none; line-height:1.6;">
+        <strong>그래프 해석:</strong>
+        이 그래프는 각 BC가 <em>직접 접근(SELECT/INSERT/UPDATE/DELETE)</em>하는 DB 테이블을 보여줍니다.<br>
+        <span style="color:#e74c3c;">● 빨간 테이블</span> = 이 도메인이 <strong>소유</strong>하는 테이블 (CUD 점수 최고, Primary Owner)<br>
+        <span style="color:#adb5bd;">○ 회색 테이블</span> = 다른 도메인이 소유하지만 이 BC가 <strong>접근</strong>하는 테이블 (데이터 결합 가능성)<br>
+        ${noLinkBcCount > 0 ? `<span style="color:#aaa;">회색 BC 노드</span> = Mapper XML 미검출 또는 다른 서비스를 통해 간접 접근 (직접 DB 호출 없음)<br>` : ''}
+        선 위에 마우스오버 → 수행 연산 상세 표시
+    </div>`;
+}
+
+// ===== 호출 상세 토글 =====
+function toggleCallDetail(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 // ⭐⭐⭐ BC 캐시 삭제 & 재분석

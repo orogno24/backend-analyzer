@@ -72,6 +72,12 @@ public class BoundedContextGroup {
     private int componentCount;
     
     /**
+     * Mapper 파싱 실패 원인 리포트 (DAO 컴포넌트에서 수집)
+     * Quarantine 진단에 사용
+     */
+    private List<String> mapperIssues;
+
+    /**
      * 설명
      */
     private String description;

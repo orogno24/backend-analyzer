@@ -50,9 +50,16 @@ public class DependencyGraphService {
         Map<String, String> componentToBC = buildComponentToBCMapping(allBCs);
         
         // 2. CodeChunk 맵 구축 (메서드 호출 정보 포함)
+        // ⭐ BcGroupingService는 "ServiceImpl" → "Service"로 정규화하므로 두 키 모두 등록
         List<CodeChunk> allChunks = ragService.getAllChunks();
-        Map<String, CodeChunk> chunkMap = allChunks.stream()
-                .collect(Collectors.toMap(CodeChunk::getName, c -> c, (c1, c2) -> c1));
+        Map<String, CodeChunk> chunkMap = new HashMap<>();
+        for (CodeChunk c : allChunks) {
+            chunkMap.put(c.getName(), c);
+            // XxxServiceImpl → XxxService 역방향 매핑 (BC 컴포넌트명 정규화 대응)
+            if (c.getName().endsWith("Impl")) {
+                chunkMap.putIfAbsent(c.getName().substring(0, c.getName().length() - 4), c);
+            }
+        }
         
         // 3. 주입된 필드의 타입명 → CodeChunk 이름 매핑 (ServiceImpl 정규화)
         Map<String, String> typeToChunkName = buildTypeToChunkNameMapping(allChunks);

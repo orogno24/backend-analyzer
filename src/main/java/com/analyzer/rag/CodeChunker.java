@@ -60,14 +60,21 @@ public class CodeChunker {
             var dependencies = dependencyAnalyzer.analyzeDependencies(
                     javaFile, content, fileResult.getComponentType());
             
-            // 3-1. DAO/Repository인 경우 CRUD 정보 추출 ⭐
+            // 3-1. DAO/Repository인 경우 CRUD 정보 추출 + 실패 원인 리포트 ⭐
             List<com.analyzer.model.TableAccess> tableAccesses = null;
+            List<String> mapperIssues = null;
             if (fileResult.getComponentType().contains("Repository") || 
                 fileResult.getComponentType().contains("DAO")) {
-                tableAccesses = dependencyAnalyzer.extractTableAccessFromMyBatisXml(
+                var mapperResult = dependencyAnalyzer.extractTableAccessFromMyBatisXmlWithReport(
                         javaFile.getParent(), 
                         fileResult.getClassName()
                 );
+                tableAccesses = mapperResult.getTableAccesses();
+                if (mapperResult.hasIssues()) {
+                    mapperIssues = new java.util.ArrayList<>();
+                    mapperIssues.add("DAO: " + fileResult.getClassName());
+                    mapperIssues.addAll(mapperResult.getIssues());
+                }
             }
             
             // 4. 클래스 단위 청크 생성 (간단하게 전체 파일을 하나의 청크로)
@@ -116,7 +123,8 @@ public class CodeChunker {
                     .serviceMethodCalls(serviceMethodCalls)  // ⭐⭐⭐ 메서드 호출 정보
                     .myBatisCalls(dependencies.getMyBatisCalls())
                     .accessedTables(dependencies.getAccessedTables())  // 기존 호환
-                    .tableAccesses(tableAccesses)  // ⭐ CRUD 정보 포함
+                    .tableAccesses(tableAccesses)   // ⭐ CRUD 정보 포함
+                    .mapperIssues(mapperIssues)     // ⭐ Mapper 파싱 실패 원인
                     .packageName(fileResult.getPackageName())
                     .build();
             

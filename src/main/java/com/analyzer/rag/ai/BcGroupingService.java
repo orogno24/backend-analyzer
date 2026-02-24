@@ -112,6 +112,7 @@ public class BcGroupingService {
         Set<String> allTables = new HashSet<>();
         Map<String, com.analyzer.model.TableAccess> tableAccessMap = new HashMap<>();  // ⭐ NEW
         Set<String> addedComponentNames = new HashSet<>();  // ⭐ 중복 방지용
+        List<String> collectedMapperIssues = new ArrayList<>();  // ⭐ Mapper 파싱 이슈 수집
         
         for (String componentName : fullyExpanded) {
             // CodeChunk 조회
@@ -142,6 +143,11 @@ public class BcGroupingService {
             if (chunk.getAccessedTables() != null && !chunk.getAccessedTables().isEmpty()) {
                 allTables.addAll(chunk.getAccessedTables());
             }
+
+            // ⭐ Mapper 파싱 이슈 수집 (DAO 컴포넌트에서만)
+            if (chunk.getMapperIssues() != null && !chunk.getMapperIssues().isEmpty()) {
+                collectedMapperIssues.addAll(chunk.getMapperIssues());
+            }
             
             // ⭐ NEW: TableAccess 수집 (CRUD 정보 포함)
             if (chunk.getTableAccesses() != null && !chunk.getTableAccesses().isEmpty()) {
@@ -165,6 +171,9 @@ public class BcGroupingService {
         group.setAccessedTables(allTables);
         group.setTableAccessMap(tableAccessMap);  // ⭐ NEW: CRUD 정보 포함
         group.setComponentCount(components.size());
+        if (!collectedMapperIssues.isEmpty()) {
+            group.setMapperIssues(collectedMapperIssues);
+        }
         
         // ⭐ Fallback: tableAccessMap 비어있으면 accessedTables 기반으로 기본값 채우기
         if (tableAccessMap.isEmpty() && !allTables.isEmpty()) {

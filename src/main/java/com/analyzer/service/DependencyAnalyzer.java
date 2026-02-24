@@ -199,15 +199,37 @@ public class DependencyAnalyzer {
      * @param daoClassName DAO 클래스명 (예: "EmsDAO")
      * @return 테이블 접근 정보 리스트 (테이블명 + CRUD 작업)
      */
+    /**
+     * Mapper 분석 결과 (TableAccess 목록 + 실패 원인 리포트)
+     */
+    public static class MapperAnalysisResult {
+        private final List<TableAccess> tableAccesses;
+        private final List<String> issues;
+        public MapperAnalysisResult(List<TableAccess> tableAccesses, List<String> issues) {
+            this.tableAccesses = tableAccesses;
+            this.issues = issues;
+        }
+        public List<TableAccess> getTableAccesses() { return tableAccesses; }
+        public List<String> getIssues() { return issues; }
+        public boolean hasIssues() { return !issues.isEmpty(); }
+    }
+
+    /** 이전 API 호환 유지: 이슈 리포트 없이 TableAccess만 반환 */
     public List<TableAccess> extractTableAccessFromMyBatisXml(Path daoDirectory, String daoClassName) {
+        return extractTableAccessFromMyBatisXmlWithReport(daoDirectory, daoClassName).getTableAccesses();
+    }
+
+    /**
+     * MyBatis XML CRUD 추출 + 실패 원인 리포트 (MapperAnalysisResult 반환)
+     */
+    public MapperAnalysisResult extractTableAccessFromMyBatisXmlWithReport(Path daoDirectory, String daoClassName) {
         Map<String, TableAccess> tableAccessMap = new HashMap<>();
+        List<String> scanLog = new ArrayList<>(); // 분석 불완전 원인 리포트용
 
         try {
-            // 프로젝트 루트에서 src/main/resources 찾기
             Path currentPath = daoDirectory;
             Path resourcesRoot = null;
             
-            // 상위로 올라가면서 src/main 찾기
             while (currentPath != null && currentPath.getNameCount() > 3) {
                 String pathStr = currentPath.toString();
                 if (pathStr.contains("/src/main/java")) {
@@ -220,46 +242,89 @@ public class DependencyAnalyzer {
             }
             
             if (resourcesRoot != null && Files.exists(resourcesRoot)) {
-                log.debug("MyBatis XML CRUD 스캔 시작: {} (DAO: {})", resourcesRoot, daoClassName);
+                final List<String> candidateFiles = new ArrayList<>();
+                final List<String> matchedFiles = new ArrayList<>();
                 
                 try (Stream<Path> paths = Files.walk(resourcesRoot, 10)) {
                     paths.filter(p -> p.toString().endsWith(".xml"))
                             .filter(p -> {
                                 String fileName = p.getFileName().toString();
-                                return fileName.contains(daoClassName) || 
+                                boolean matches = fileName.contains(daoClassName) || 
                                        fileName.contains(daoClassName.replace("DAO", "")) ||
-                                       fileName.contains(daoClassName.replace("DAO", "_SQL"));
+                                       fileName.contains(daoClassName.replace("DAO", "_SQL")) ||
+                                       fileName.contains(daoClassName.replace("Mapper", ""));
+                                if (matches) candidateFiles.add(p.toString());
+                                return matches;
                             })
                             .forEach(xmlPath -> {
                                 try {
                                     String xmlContent = Files.readString(xmlPath);
+                                    String simpleDao = daoClassName.replace("DAO", "");
                                     
-                                    if (xmlContent.contains("namespace=\"" + daoClassName + "\"") ||
-                                        xmlContent.contains("namespace=\"" + daoClassName.replace("DAO", "") + "\"")) {
-                                        
-                                        // 각 SQL 태그별로 CRUD 작업 추출 ⭐
+                                    // 네임스페이스 매칭 (단순명 + 전체경로 포함)
+                                    boolean nsMatch = xmlContent.contains("namespace=\"" + daoClassName + "\"") ||
+                                            xmlContent.contains("namespace=\"" + simpleDao + "\"") ||
+                                            xmlContent.contains("." + daoClassName + "\"") ||
+                                            xmlContent.contains("." + simpleDao + "\"");
+                                    
+                                    if (nsMatch) {
+                                        matchedFiles.add(xmlPath.getFileName().toString());
                                         extractTableAccessFromTag(xmlContent, "<select", TableAccess.CrudOperation.READ, tableAccessMap);
                                         extractTableAccessFromTag(xmlContent, "<insert", TableAccess.CrudOperation.CREATE, tableAccessMap);
                                         extractTableAccessFromTag(xmlContent, "<update", TableAccess.CrudOperation.UPDATE, tableAccessMap);
                                         extractTableAccessFromTag(xmlContent, "<delete", TableAccess.CrudOperation.DELETE, tableAccessMap);
-                                        
-                                        log.debug("XML CRUD 추출: {} -> {} 테이블", 
-                                                xmlPath.getFileName(), tableAccessMap.size());
+
+                                        // 분석 불완전 원인 감지
+                                        detectIncompletePatterns(xmlContent, xmlPath.getFileName().toString(), scanLog);
+                                        log.debug("XML CRUD 추출: {} → {}개 테이블", xmlPath.getFileName(), tableAccessMap.size());
+                                    } else {
+                                        // 파일은 찾았지만 namespace 불일치
+                                        String foundNs = extractNamespace(xmlContent);
+                                        scanLog.add(String.format("NS_MISMATCH: %s (expected='%s', found='%s')",
+                                                xmlPath.getFileName(), daoClassName, foundNs));
                                     }
                                 } catch (IOException e) {
-                                    log.debug("XML 읽기 실패: {}", xmlPath);
+                                    scanLog.add("READ_FAIL: " + xmlPath.getFileName() + " - " + e.getMessage());
                                 }
                             });
                 }
                 
-                log.debug("MyBatis XML CRUD 스캔 완료: DAO={}, {}개 테이블", daoClassName, tableAccessMap.size());
+                if (tableAccessMap.isEmpty()) {
+                    if (candidateFiles.isEmpty()) {
+                        log.info("[Mapper 미탐지] DAO='{}' → resources 내 매칭 XML 파일 없음. 파일명 규칙 확인 필요", daoClassName);
+                    } else {
+                        log.info("[Mapper namespace 불일치] DAO='{}' → 후보파일={}개, NS매칭={}개. 원인: {}",
+                                daoClassName, candidateFiles.size(), matchedFiles.size(), scanLog);
+                    }
+                } else if (!scanLog.isEmpty()) {
+                    log.info("[Mapper 부분 파싱] DAO='{}' → {}개 테이블 탐지, 불완전 패턴 감지: {}",
+                            daoClassName, tableAccessMap.size(), scanLog);
+                }
             }
 
         } catch (Exception e) {
-            log.debug("MyBatis XML CRUD 스캔 실패: {}", e.getMessage());
+            log.debug("MyBatis XML CRUD 스캔 실패 [{}]: {}", daoClassName, e.getMessage());
         }
 
-        return new ArrayList<>(tableAccessMap.values());
+        return new MapperAnalysisResult(new ArrayList<>(tableAccessMap.values()), scanLog);
+    }
+    
+    /** 동적 SQL 패턴 감지 (분석 불완전 원인 리포트) */
+    private void detectIncompletePatterns(String xmlContent, String fileName, List<String> scanLog) {
+        if (xmlContent.contains("<include refid=")) scanLog.add(fileName + ": <include refid> 사용 (테이블 누락 가능)");
+        if (xmlContent.contains("<bind ")) scanLog.add(fileName + ": <bind> 동적 SQL (테이블명 변수화)");
+        if (xmlContent.contains("<foreach ")) scanLog.add(fileName + ": <foreach> 다중 바인딩 (테이블 분산 가능)");
+        if (xmlContent.contains("${") || xmlContent.contains("${tableName") || xmlContent.contains("${table"))
+            scanLog.add(fileName + ": ${변수} String concat 쿼리 (동적 테이블명)");
+        if (xmlContent.contains("EXECUTE") || xmlContent.contains("EXEC "))
+            scanLog.add(fileName + ": 동적 실행(EXECUTE/EXEC) → 정적 분석 불가");
+    }
+    
+    /** XML namespace 추출 */
+    private String extractNamespace(String xmlContent) {
+        Pattern nsPattern = Pattern.compile("namespace=\"([^\"]+)\"");
+        Matcher m = nsPattern.matcher(xmlContent);
+        return m.find() ? m.group(1) : "(없음)";
     }
     
     /**
