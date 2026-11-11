@@ -1,4 +1,4 @@
-backend-analyzer (모놀리식 시스템의 바운디드 컨텍스트를 분류하는 AI 분석기)
+### backend-analyzer (모놀리식 시스템의 바운디드 컨텍스트를 분류하는 AI 분석기)
 
 - **1단계 (정적 분석 & 임베딩 벡터 변환 - `AllMiniLM`):**
     - `@Controller`, `@Service`, `@DTO` 및 DB 테이블 구조 추출
